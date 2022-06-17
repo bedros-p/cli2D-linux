@@ -7,8 +7,9 @@
 #include <string>
 #include <ncurses.h>
 
-#define xSize 20
-#define ySize 20
+#define xSize 50
+#define ySize 50
+#define camDepth 5
 
 void hideCursor(){printf("\e[?25l");}
 void showCursor(){printf("\e[?25h");} //I could just directly print it but its more understandable this way
@@ -45,6 +46,7 @@ vec3 screenSpace(vec3 object) { //legacy code from old renderwow, but hey it wor
     screenSpaceObj.x = (cameraPos.x - object.x) + (int)(xSize / 2);
     screenSpaceObj.y = (cameraPos.y - object.y) + (int)(ySize / 2);
     screenSpaceObj.z = std::clamp((cameraPos.z - object.z),1,5);
+    if (cameraPos.z - object.z>camDepth){screenSpaceObj.z = 0;} //if behind camera, set to 0. Yes, i can just use min instead of clamp, but im lazy
     return screenSpaceObj;
 }
 
@@ -69,8 +71,8 @@ std::string render(){
     for (vecList::const_iterator itr = ptrList.cbegin(); itr!=ptrList.end();itr++){
         vec3 vec = screenSpace(vec3(*(*itr)));
 
-        if (!(vec.x<0 || vec.x>=xSize || vec.y<0 || vec.y>=ySize)) { //if in screen
-            if ((screen[vec.x][vec.y]-'0') < vec.x){ //overlap fix
+        if (!(vec.x<-1 || vec.x>xSize || vec.y<0 || vec.y>=ySize)) { //if in screen
+            if (vec.z > (screen[vec.x][vec.y]-'0')){ //overlap fix, only draw if the current pixel is brighter than the one we're drawing over
                 screen[vec.x][vec.y] = (vec.z+48); //48 is the ascii value of 0, and 1+48 would give ascii for 1, 2+48 would give ascii for 2, etc.
             }
             //dont handle the else since its not getting rendered if its behind a pixel anyways
@@ -93,16 +95,19 @@ std::string render(){
 int main(){
     initscr();
     hideCursor();
-    vec3 pixel = {2,0,3};
+    vec3 pixel = {2,7,-3};
     pixel = *createPixel(&pixel); //XYZ COORDINATES!!! NO MORE X,DEPTH,Y!!!!!!!!!
+
+    vec3 pixelCoords = {2,1,3};
+    createPixel(&pixelCoords); //XYZ COORDINATES!!! NO MORE X,DEPTH,Y!!!!!!!!!
     pixel.y+=9;
     
     while(true){ //cursed code incoming
-        endwin();
-        system("clear");
-        render();
-        cbreak();
-        noecho();
+        endwin(); //restore
+        system("clear"); //clear screen
+        render(); //render
+        cbreak(); //disable line buffering, receive characters as soon as its typed without waiting for a newline
+        noecho(); //disable echoing of characters pressed
         char keypress = getchar();
         if (keypress == 'q'){
             system("stty sane");
@@ -121,11 +126,11 @@ int main(){
             pixel.x--;
         }
         
-        echo();
-        nocbreak();
+        echo(); //restore
+        nocbreak(); //restore
     }
     showCursor();
     exit_curses(0);
 
     return 0;
-} //you can probably shape this code to be a donut
+}
